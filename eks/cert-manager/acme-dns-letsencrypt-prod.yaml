@@ -1,0 +1,58 @@
+---
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:    
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: infra@uds.com.br
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - selector:
+        dnsZones:
+        - "udstecnologia.com.br"
+    - dns01:
+        route53:
+            region: eu-west-2
+            accessKeyID: AKIAYGK2HOIZXVM6GOF4
+            role: arn:aws:iam::563366818355:policy/letsencrypt-wildcard
+            secretAccessKeySecretRef:
+              name: aws-route53-creds
+              key: password.txt
+---
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: infra@uds.com.br
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    http01: {}
+
+---
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  name: wildcard-prod
+  namespace: cert-manager
+spec:
+  secretName: cert-prod-wildcard
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: '*.cardpay.udstecnologia.com.br'
+  dnsNames:
+  - udstecnologia.com.br
+  - '*.cardpay.udstecnologia.com.br'
+  acme:
+    config:
+    - dns01:
+        provider: aws-dns
+      domains:
+      - udstecnologia.com.br
+      - '*.cardpay.udstecnologia.com.br'

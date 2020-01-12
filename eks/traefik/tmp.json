@@ -1,0 +1,28 @@
+{
+  "apiVersion": "v1",
+  "kind": "Namespace",
+  "metadata": {
+    "annotations": {
+      "cattle.io/status": "{\"Conditions\":[{\"Type\":\"ResourceQuotaInit\",\"Status\":\"True\",\"Message\":\"\",\"LastUpdateTime\":\"2020-01-09T13:58:30Z\"},{\"Type\":\"InitialRolesPopulated\",\"Status\":\"True\",\"Message\":\"\",\"LastUpdateTime\":\"2020-01-09T13:58:35Z\"}]}",
+      "field.cattle.io/containerDefaultResourceLimit": "{}",
+      "field.cattle.io/projectId": "c-2v8zz:p-fljxv",
+      "field.cattle.io/resourceQuota": "{}",
+      "lifecycle.cattle.io/create.namespace-auth": "true"
+    },
+    "creationTimestamp": "2020-01-09T13:58:29Z",
+    "deletionTimestamp": "2020-01-09T17:27:26Z",
+    "labels": {
+      "field.cattle.io/projectId": "p-fljxv"
+    },
+    "name": "cert-manager",
+    "resourceVersion": "623332",
+    "selfLink": "/api/v1/namespaces/cert-manager",
+    "uid": "1d37efbb-32e8-11ea-b6d8-024b08ab7910"
+  },
+  "spec": {
+    "finalizers": []
+  },
+  "status": {
+    "phase": "Terminating"
+  }
+}

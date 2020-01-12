@@ -1,0 +1,39 @@
+image: traefik
+imageTag: 1.7.20
+serviceType: LoadBalancer
+deployment:
+  replicas: 3
+rbac:
+  enabled: true
+ssl:
+    enabled: true
+dashboard:
+  enabled: true
+  domain: traefik.cardpay.udstecnologia.com.br
+  auth:
+    basic: 
+      uds: "$apr1$qvU/oPto$NFDXVTjf0Pk3UzYvGOLUN0"
+  ingress:
+     annotations:
+       kubernetes.io/ingress.class: traefik
+       traefik.ingress.kubernetes.io/redirect-entry-point: https
+       certmanager.k8s.io/cluster-issuer: letsencrypt-prod
+     tls:
+       - hosts:
+         - traefik.cardpay.udstecnologia.com.br
+         secretName: cert-prod-wildcard
+cpuRequest: 100m
+memoryRequest: 2.5Gi
+cpuLimit: 1000m
+memoryLimit: 2.5Gi
+accessLogs:
+  enabled: true 
+kubernetes:
+  ingressClass: traefik
+  namespaces:
+    - default
+    - kube-system
+    - traefik
+autoscaling:
+ minReplicas: 1
+ maxReplicas: 10
