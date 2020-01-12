@@ -1,0 +1,274 @@
+stages:
+  - build
+  - test
+  - analysis
+  - deploy
+  - deploy-quality
+  - deploy-release
+  - deploy-full
+  - deploy-production
+  - deploy-k8s
+
+build:
+  tags:
+    - dotnet
+  stage: build
+  only:
+    - merge_requests
+    - /^develop$/
+    - /^release\/\d+.*/
+    - /^master$/
+
+  image: docker-nexus.uds.com.br/dotnet/sonar-analyser
+  script:
+    - cp $NUGET_CONFIG_FILE ./nuget.config
+    - dotnet restore Uds.Baas.sln
+    - dotnet build Uds.Baas.sln
+
+test:
+  stage: test
+  only: ['merge_requests']
+  except:
+    - /^develop$/
+    - /^release\/\d+.*/
+    - /^master$/
+  tags:
+    - dotnet
+  dependencies:
+    - build
+  image: docker-nexus.uds.com.br/dotnet/sonar-analyser
+  script:
+    - cp $NUGET_CONFIG_FILE ./nuget.config
+    - dotnet test Uds.Baas.Tests
+
+analysis:
+  stage: analysis
+  tags:
+    - dotnet
+  only: ['merge_requests']
+  except:
+    - /^develop$/
+    - /^release\/\d+.*/
+    - /^master$/
+  image: docker-nexus.uds.com.br/dotnet/sonar-analyser
+  dependencies:
+    - build
+  script:
+    - cp $NUGET_CONFIG_FILE ./nuget.config
+    - dotnet test Uds.Baas.Tests/Uds.Baas.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=opencover
+    - dotnet build-server shutdown
+    - dotnet tool install --global dotnet-sonarscanner
+    - export PATH="$PATH:/root/.dotnet/tools"
+    - dotnet sonarscanner begin /k:"4ba02fbf272a739a632bb0f86345813f6ddd8ed7" /d:sonar.host.url=http://10.70.70.36 /d:sonar.login=7dba40ccfb1dbf4a85c7d2e22b84a4bcb7dd3707 /d:sonar.cs.opencover.reportsPaths="/builds/logma/batpay/backend-dotnet/uds-baas-servicos/Uds.Baas.Tests/coverage.opencover.xml" /d:sonar.coverage.exclusions="**Tests*.cs"
+    - dotnet build Uds.Baas.sln
+    - dotnet sonarscanner end /d:sonar.login=7dba40ccfb1dbf4a85c7d2e22b84a4bcb7dd3707
+
+deploy:
+  stage: deploy
+  tags:
+    - dotnet
+  only:
+    - /^develop$/
+  image: docker-nexus.uds.com.br/tmaier/docker-compose:latest
+  script:
+    - cp $NUGET_CONFIG_FILE ./nuget.config
+    - docker login docker-nexus.uds.com.br -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - docker build -t docker-nexus.uds.com.br/baas/backend/store:develop -f ./Uds.Baas.Services.CashOut.Store/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/store:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/auth:develop -f ./Uds.Baas.Services.Auth/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/auth:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/gateway:develop -f ./Uds.Baas.Services.Gateway/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/gateway:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/wallet:develop -f ./Uds.Baas.Services.Wallet/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/wallet:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/core-api:develop -f ./Uds.Baas.Services.Core.Api/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/core-api:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/register:develop -f ./Uds.Baas.Services.Register/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/register:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashin.invoice:develop -f ./Uds.Baas.Services.CashIn.CashinInvoice/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashin.invoice:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout.recharge-cellphone:develop -f ./Uds.Baas.Services.CashOut.CashoutRechargeCellphone/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout.recharge-cellphone:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout.bank-transfer:develop -f ./Uds.Baas.Services.CashOut.CashoutBankTransfer/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout.bank-transfer:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/jobs:develop -f ./Uds.Baas.Services.Jobs/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/jobs:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/communication:develop -f ./Uds.Baas.Services.Communication/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/communication:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashin.bank-transfer:develop -f ./Uds.Baas.Services.CashIn.CashinBankTransfer/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashin.bank-transfer:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout.invoice:develop -f ./Uds.Baas.Services.CashOut.CashoutInvoice/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout.invoice:develop
+    - docker build -t docker-nexus.uds.com.br/baas/backend/credit-card:develop -f ./Uds.Baas.Services.CreditCard/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/credit-card:develop
+
+deploy-quality:
+  stage: deploy-quality
+  tags:
+    - dotnet
+  only:
+    - /^.*-quality$/
+  except:
+    - branches
+  image: docker-nexus.uds.com.br/tmaier/docker-compose:latest
+  script:
+    - cp $NUGET_CONFIG_FILE ./nuget.config
+    - docker login docker-nexus.uds.com.br -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - docker build -t docker-nexus.uds.com.br/baas/backend/wallet:quality -f ./Uds.Baas.Services.Wallet/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/wallet:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/gateway:quality -f ./Uds.Baas.Services.Gateway/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/gateway:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/auth:quality -f ./Uds.Baas.Services.Auth/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/auth:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/core-api:quality -f ./Uds.Baas.Services.Core.Api/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/core-api:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/register:quality -f ./Uds.Baas.Services.Register/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/register:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashin.invoice:quality -f ./Uds.Baas.Services.CashIn.CashinInvoice/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashin.invoice:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout.recharge-cellphone:quality -f ./Uds.Baas.Services.CashOut.CashoutRechargeCellphone/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout.recharge-cellphone:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout.bank-transfer:quality -f ./Uds.Baas.Services.CashOut.CashoutBankTransfer/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout.bank-transfer:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/jobs:quality -f ./Uds.Baas.Services.Jobs/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/jobs:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/communication:quality -f ./Uds.Baas.Services.Communication/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/communication:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashin.bank-transfer:quality -f ./Uds.Baas.Services.CashIn.CashinBankTransfer/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashin.bank-transfer:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout.invoice:quality -f ./Uds.Baas.Services.CashOut.CashoutInvoice/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout.invoice:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/store:quality -f ./Uds.Baas.Services.CashOut.Store/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/store:quality
+    - docker build -t docker-nexus.uds.com.br/baas/backend/credit-card:quality -f ./Uds.Baas.Services.CreditCard/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/credit-card:quality
+
+deploy-release:
+  stage: deploy-release
+  tags:
+    - dotnet
+  only:
+    - /^.*-release$/
+  except:
+    - branches
+  image: docker-nexus.uds.com.br/tmaier/docker-compose:latest
+  script:
+    - cp $NUGET_CONFIG_FILE ./nuget.config
+    - docker login docker-nexus.uds.com.br -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - docker build -t docker-nexus.uds.com.br/baas/backend/wallet:release -f ./Uds.Baas.Services.Wallet/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/wallet:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/gateway:release -f ./Uds.Baas.Services.Gateway/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/gateway:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/auth:release -f ./Uds.Baas.Services.Auth/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/auth:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/core-api:release -f ./Uds.Baas.Services.Core.Api/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/core-api:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/register:release -f ./Uds.Baas.Services.Register/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/register:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashin.invoice:release -f ./Uds.Baas.Services.CashIn.CashinInvoice/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashin.invoice:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout.recharge-cellphone:release -f ./Uds.Baas.Services.CashOut.CashoutRechargeCellphone/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout.recharge-cellphone:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout.bank-transfer:release -f ./Uds.Baas.Services.CashOut.CashoutBankTransfer/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout.bank-transfer:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/jobs:release -f ./Uds.Baas.Services.Jobs/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/jobs:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/communication:release -f ./Uds.Baas.Services.Communication/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/communication:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashin.bank-transfer:release -f ./Uds.Baas.Services.CashIn.CashinBankTransfer/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashin.bank-transfer:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout.invoice:release -f ./Uds.Baas.Services.CashOut.CashoutInvoice/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout.invoice:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/store:release -f ./Uds.Baas.Services.CashOut.Store/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/store:release
+    - docker build -t docker-nexus.uds.com.br/baas/backend/credit-card:release -f ./Uds.Baas.Services.CreditCard/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/credit-card:release
+
+deploy-production:
+  stage: deploy-production
+  tags:
+    - dotnet
+  only:
+    - /^v\d\.\d\.\d-production$/
+  image: docker-nexus.uds.com.br/tmaier/docker-compose:latest
+  script:
+    - cp $NUGET_CONFIG_FILE ./nuget.config
+    - docker login docker-nexus.uds.com.br -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - docker build -t docker-nexus.uds.com.br/baas/backend/wallet:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.Wallet/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/wallet:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/gateway:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.Gateway/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/gateway:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/auth:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.Auth/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/auth:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/core-api:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.Core.Api/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/core-api:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/register:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.Register/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/register:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashin-invoice:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.CashIn.CashinInvoice/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashin-invoice:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout-recharge-cellphone:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.CashOut.CashoutRechargeCellphone/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout-recharge-cellphone:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout-bank-transfer:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.CashOut.CashoutBankTransfer/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout-bank-transfer:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/jobs:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.Jobs/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/jobs:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/communication:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.Communication/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/communication:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashin-bank-transfer:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.CashIn.CashinBankTransfer/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashin-bank-transfer:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/cashout-invoice:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.CashOut.CashoutInvoice/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/cashout-invoice:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/store:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.CashOut.Store/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/store:$CI_COMMIT_REF_NAME
+    - docker build -t docker-nexus.uds.com.br/baas/backend/credit-card:$CI_COMMIT_REF_NAME -f ./Uds.Baas.Services.CreditCard/Dockerfile .
+    - docker push docker-nexus.uds.com.br/baas/backend/credit-card:$CI_COMMIT_REF_NAME
+
+deploy-k8s:
+  stage: deploy-k8s
+  dependencies:
+    - deploy-production
+  image: alpine
+  only:
+    - /^v\d\.\d\.\d-production$/
+  script:
+    - apk add --update --no-cache curl python python-dev py-pip build-base
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+    - chmod +x ./kubectl
+    - mv ./kubectl /usr/local/bin/kubectl
+    - pip install --upgrade awscli
+    - curl -o heptio-authenticator-aws https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/heptio-authenticator-aws
+    - chmod +x ./heptio-authenticator-aws
+    - mv ./heptio-authenticator-aws /usr/local/bin/heptio-authenticator-aws
+    - mkdir ~/.aws
+    - echo -e "[default]\noutput = json\nregion = ${CLUSTER_REGION}" > ~/.aws/config
+    - echo -e "[default]\naws_access_key_id = ${AWS_ACCESS_KEY}\naws_secret_access_key = ${AWS_SECRET}" > ~/.aws/credentials
+    - aws eks update-kubeconfig --name $CLUSTER_NAME --region=$CLUSTER_REGION
+    - 'printf "apiVersion: v1\nkind: Secret\n$(kubectl create secret docker-registry gitlab-registry --docker-server=docker-nexus.uds.com.br --docker-username=$DOCKER_USER --docker-password=$DOCKER_PASSWORD --docker-email=gitlab@uds.com.br -o yaml --dry-run)" | kubectl apply -f -'
+    - sed 's/_API_NAME_/'wallet'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'wallet'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'wallet'/g;' eks-k8s.yaml > kubernetes-wallet.yaml;
+    - kubectl apply -f kubernetes-wallet.yaml
+    - sed 's/_API_NAME_/'auth'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'auth'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'auth'/g;' eks-k8s.yaml > kubernetes-auth.yaml;
+    - kubectl apply -f kubernetes-auth.yaml
+    - sed 's/_API_NAME_/'core-api'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'core-api'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'core-api'/g;' eks-k8s.yaml > kubernetes-core-api.yaml;
+    - kubectl apply -f kubernetes-core-api.yaml
+    - sed 's/_API_NAME_/'register'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'register'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'register'/g;' eks-k8s.yaml > kubernetes-register.yaml;
+    - kubectl apply -f kubernetes-register.yaml
+    - sed 's/_API_NAME_/'cashin-invoice'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'cashin-invoice'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'cashin-invoice'/g;' eks-k8s.yaml > kubernetes-cashin-invoice.yaml;
+    - kubectl apply -f kubernetes-cashin-invoice.yaml
+    - sed 's/_API_NAME_/'cashout-recharge-cellphone'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'cashout-recharge-cellphone'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'cashout-recharge-cellphone'/g;' eks-k8s.yaml > kubernetes-cashout-recharge-cellphone.yaml;
+    - kubectl apply -f kubernetes-cashout-recharge-cellphone.yaml
+    - sed 's/_API_NAME_/'cashout-bank-transfer'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'cashout-bank-transfer'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'cashout-bank-transfer'/g;' eks-k8s.yaml > kubernetes-cashout-bank-transfer.yaml;
+    - kubectl apply -f kubernetes-cashout-bank-transfer.yaml
+    - sed 's/_API_NAME_/'jobs'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'jobs'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'jobs'/g;' eks-k8s.yaml > kubernetes-jobs.yaml;
+    - kubectl apply -f kubernetes-jobs.yaml
+    - sed 's/_API_NAME_/'communication'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'communication'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'communication'/g;' eks-k8s.yaml > kubernetes-communication.yaml;
+    - kubectl apply -f kubernetes-communication.yaml
+    - sed 's/_API_NAME_/'cashin-bank-transfer'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'cashin-bank-transfer'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'cashin-bank-transfer'/g;' eks-k8s.yaml > kubernetes-cashin-bank-transfer.yaml;
+    - kubectl apply -f kubernetes-cashin-bank-transfer.yaml
+    - sed 's/_API_NAME_/'cashout-invoice'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'cashout-invoice'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'cashout-invoice'/g;' eks-k8s.yaml > kubernetes-cashout-invoice.yaml;
+    - kubectl apply -f kubernetes-cashout-invoice.yaml
+    - sed 's/_API_NAME_/'store'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'store'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'store'/g;' eks-k8s.yaml > kubernetes-store.yaml;
+    - kubectl apply -f kubernetes-store.yaml
+    - sed 's/_API_NAME_/'credit-card'/g; s/_MIN_REPLIC_/'3'/g; s/_MAX_REPLIC_/'10'/g; s/_IMAGE_NAME_/'credit-card'/g; s/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g; s/_API_HOST_/'credit-card'/g;' eks-k8s.yaml > kubernetes-credit-card.yaml;
+    - kubectl apply -f kubernetes-credit-card.yaml
+  tags:
+    - dotnet
