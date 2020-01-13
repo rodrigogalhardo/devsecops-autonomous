@@ -1,6 +1,8 @@
+
+#/bin/bash
+
 # Created by:
 # Rodrigo Galhardo | Arquiteto de soluções , DevSecOps Leader
-# Vinicius Ribeiro | Arquiteto de Soluções , DevOps Engineer
 
 #Prerequisites
 
@@ -12,7 +14,9 @@
 #Config Maps for storing Postgres configurations
 #Persistent Storage Volume
 #PostgreSQL Deployment
+
 #PostgreSQL Service
+
 
 echo "Running Postgres SQL bash Installer <--->"
 
