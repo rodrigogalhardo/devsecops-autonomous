@@ -1,0 +1,170 @@
+stages:
+  - install_dependencies
+  - lint_unit_tests
+  - analysis
+  - deploy
+  - deploy-k8s
+
+install-dependencies:
+  stage: install_dependencies
+  image: docker-nexus.uds.com.br/node:10.15-alpine
+  cache:
+    paths:
+      - node_modules/
+      - /root/.cache/Cypress
+  artifacts:
+    paths:
+      - node_modules/
+      - /root/.cache/Cypress
+    expire_in: 1 hrs
+  only:
+    - /^feature|hotfix\/.*$/
+  script:
+    - yarn
+  tags:
+    - front
+
+eslint:
+  stage: lint_unit_tests
+  dependencies:
+    - install-dependencies
+  artifacts:
+    paths:
+      - eslintReport.json
+    expire_in: 1 hrs
+  image: docker-nexus.uds.com.br/node:10.15-alpine
+  only:
+    - /^feature|hotfix\/.*$/
+  script:
+    - yarn run lint || yarn run lint --format json | sed -n 3p > eslintReport.json
+  tags:
+    - front
+
+unit-tests:
+  stage: lint_unit_tests
+  dependencies:
+    - install-dependencies
+  artifacts:
+    paths:
+      - coverage/
+    expire_in: 1 hrs
+  image: docker-nexus.uds.com.br/node:10.15-alpine
+  only:
+    - /^feature|hotfix\/.*$/
+  script:
+    - yarn test:unit
+  tags:
+    - front
+
+sonarqube:
+  stage: analysis
+  image: docker-nexus.uds.com.br/ciricihq/gitlab-sonar-scanner
+  dependencies:
+    - unit-tests
+    - eslint
+  before_script:
+    - echo "Working on branch $CI_COMMIT_REF_NAME"
+    - export SONAR_ANALYSIS_MODE=$(if echo "$CI_COMMIT_REF_NAME" | grep "^[feature|hotfix].*" > /dev/null; then echo "issues"; else echo "publish"; fi)
+    - echo "-Dsonar.host.url=$SONAR_URL sonar.projectKey=$SONAR_PROJECT_KEY sonar.login=$SONAR_LOGIN sonar.gitlab.user_token=$GITLAB_USER_TOKEN sonar.gitlab.project_id=$CI_PROJECT_PATH sonar.gitlab.commit_sha=$CI_COMMIT_SHA sonar.gitlab.ref_name=$CI_COMMIT_REF_NAME sonar.gitlab.ci_merge_request_iid=$CI_MERGE_REQUEST_IID sonar.analysis.mode=$SONAR_ANALYSIS_MODE"
+  script:
+    - echo "Running SonarQube on mode $SONAR_ANALYSIS_MODE"
+    - gitlab-sonar-scanner -X
+      -Dsonar.host.url=$SONAR_URL
+      -Dsonar.projectKey=$SONAR_PROJECT_KEY
+      -Dsonar.login=$SONAR_LOGIN
+      -Dsonar.gitlab.user_token=$GITLAB_USER_TOKEN
+      -Dsonar.gitlab.project_id=$CI_PROJECT_PATH
+      -Dsonar.gitlab.commit_sha=$CI_COMMIT_SHA
+      -Dsonar.gitlab.ref_name=$CI_COMMIT_REF_NAME
+      -Dsonar.gitlab.ci_merge_request_iid=$CI_MERGE_REQUEST_IID
+      -Dsonar.analysis.mode=$SONAR_ANALYSIS_MODE
+  only:
+    - /^feature|hotfix\/.*$/
+  tags:
+    - front
+
+deploy-develop:
+  stage: deploy
+  image:
+    name: docker-nexus.uds.com.br/tmaier/docker-compose:latest
+    entrypoint: ["/bin/sh", "-c"]
+  only:
+    - /^develop$/
+  script:
+    - docker login docker-nexus.uds.com.br -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - docker build -t docker-nexus.uds.com.br/batpay/frontend:develop -f ./docker/DockerFileBuild .
+    - docker push docker-nexus.uds.com.br/batpay/frontend:develop
+    - docker rmi -f $(docker images -a | grep docker-nexus.uds.com.br/batpay/frontend:develop) || true
+  tags:
+    - front
+
+deploy-quality:
+  stage: deploy
+  image:
+    name: docker-nexus.uds.com.br/tmaier/docker-compose:latest
+    entrypoint: ["/bin/sh", "-c"]
+  only:
+    - /^v\d\.\d\.\d-quality$/
+  script:
+    - docker login docker-nexus.uds.com.br -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - docker build -t docker-nexus.uds.com.br/batpay/frontend:quality -f ./docker/DockerFileBuild .
+    - docker push docker-nexus.uds.com.br/batpay/frontend:quality
+    - docker rmi -f $(docker images -a | grep docker-nexus.uds.com.br/batpay/frontend:quality) || true
+  tags:
+    - front
+
+deploy-release:
+  stage: deploy
+  image:
+    name: docker-nexus.uds.com.br/tmaier/docker-compose:latest
+    entrypoint: ["/bin/sh", "-c"]
+  only:
+    - /^v\d\.\d\.\d-release$/
+  script:
+    - docker login docker-nexus.uds.com.br -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - docker build -t docker-nexus.uds.com.br/batpay/frontend:release -f ./docker/DockerFileBuild .
+    - docker push docker-nexus.uds.com.br/batpay/frontend:release
+    - docker rmi -f $(docker images -a | grep docker-nexus.uds.com.br/batpay/frontend:release) || true
+  tags:
+    - front
+
+deploy-production:
+  stage: deploy
+  image:
+    name: docker-nexus.uds.com.br/tmaier/docker-compose:latest
+    entrypoint: ["/bin/sh", "-c"]
+  only:
+    - /^v\d\.\d\.\d-production$/
+  script:
+    - docker login docker-nexus.uds.com.br -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - docker build -t docker-nexus.uds.com.br/batpay/frontend:$CI_COMMIT_REF_NAME -f ./docker/DockerFileBuild .
+    - docker push docker-nexus.uds.com.br/batpay/frontend:$CI_COMMIT_REF_NAME
+    - docker rmi -f $(docker images -a | grep docker-nexus.uds.com.br/batpay/frontend:$CI_COMMIT_REF_NAME) || true
+  tags:
+    - front
+
+deploy-k8s:
+  stage: deploy-k8s
+  dependencies:
+    - deploy-production
+  image: alpine
+  only:
+    - /^v\d\.\d\.\d-production$/
+  script:
+    - apk add --update --no-cache curl python python-dev py-pip build-base
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+    - chmod +x ./kubectl
+    - mv ./kubectl /usr/local/bin/kubectl
+    - pip install --upgrade awscli
+    - curl -o heptio-authenticator-aws https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/heptio-authenticator-aws
+    - chmod +x ./heptio-authenticator-aws
+    - mv ./heptio-authenticator-aws /usr/local/bin/heptio-authenticator-aws
+    - mkdir ~/.aws
+    - echo -e "[default]\noutput = json\nregion = ${CLUSTER_REGION}" > ~/.aws/config
+    - echo -e "[default]\naws_access_key_id = ${AWS_ACCESS_KEY}\naws_secret_access_key = ${AWS_SECRET}" > ~/.aws/credentials
+    - aws eks update-kubeconfig --name $CLUSTER_NAME --region=$CLUSTER_REGION
+    - 'printf "apiVersion: v1\nkind: Secret\n$(kubectl create secret docker-registry gitlab-registry --docker-server=https://docker-nexus.udstecnologia.com.br --docker-username=$DOCKER_USER --docker-password=$DOCKER_PASSWORD --docker-email=gitlab@uds.com.br -o yaml --dry-run)" | kubectl apply -f -'
+    - sed 's/_IMAGE_TAG_/'"$CI_COMMIT_REF_NAME"'/g' eks-k8s.yaml > kubernetes.yaml
+    - kubectl apply -f kubernetes.yaml
+  tags:
+    - front
