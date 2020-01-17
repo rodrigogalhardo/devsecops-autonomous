@@ -20,11 +20,6 @@ spec:
                 name: postgres-config
           volumeMounts:
             - mountPath: /var/lib/postgresql/data
-              name: postgredb
-            - mountPath: /etc/timezone:/etc/timezone:ro
-              name: postgredb
-            - mountPath: /etc/localtime:/etc/localtime:ro
-              name: 
       volumes:
         - name: postgredb
           persistentVolumeClaim:

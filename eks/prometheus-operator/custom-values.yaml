@@ -1,0 +1,88 @@
+fullnameOverride: cluster-monitor
+
+# Define persistent storage for Prometheus (PVC)
+prometheus:
+  prometheusSpec:
+    enableAdminAPI: true
+    retention: 90d
+    storageSpec:
+      volumeClaimTemplate:
+        metadata:
+          name: pvc
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: eks-standard
+          resources:
+            requests:
+              storage: 30Gi
+
+prometheusOperator:
+  createCustomResource: false
+
+# Define persistent storage for Grafana (PVC)
+grafana:
+  ingress: 
+    enabled: true
+    annotations: 
+      kubernetes.io/ingress.class: traefik
+      traefik.ingress.kubernetes.io/redirect-entry-point: https
+      certmanager.k8s.io/cluster-issuer: letsencrypt-prod
+    hosts: 
+    - grafana.cardpay.udstecnologia.com.br
+    tls:
+    - hosts:
+      - grafana.carpay.restoque.com.br
+      secretName: cert-grafana-prd
+  adminPassword: MGJyFLhuoOL2hl8b1xKSypA1aADcJpsDvrUrSs6b
+  persistence:
+    enabled: true
+    storageClassName: slow
+    accessModes: ["ReadWriteOnce"]
+    size: 30Gi
+  plugins:
+  - grafana-piechart-panel
+
+# Define persistent storage for Alertmanager (PVC)
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        metadata:
+          name: pvc
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: slow
+          resources:
+            requests:
+              storage: 30Gi
+
+# Disable Kubelet metrics
+# kubelet:
+#   enabled: false
+
+# Disable Etcd metrics
+kubeEtcd:
+  enabled: false
+
+# Disable KubeControllerManager
+kubeControllerManager:
+  enabled: false
+
+# Disable Kube Scheduler
+kubeScheduler:
+  enabled: false
+
+# Disable kubelet HTTPS
+kubelet:
+  serviceMonitor:
+    https: false
+
+kubeApiServer:
+  relabelings:
+    - sourceLabels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+      action: keep
+      regex: default;kubernetes;https
+    - targetLabel: __address__
+      replacement: kubernetes.default.svc:443
+
+

@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Created by:
 # Rodrigo Galhardo | Arquiteto de soluções , DevSecOps Leader
 # Vinicius Ribeiro | Arquiteto de Soluções , DevOps Engineer

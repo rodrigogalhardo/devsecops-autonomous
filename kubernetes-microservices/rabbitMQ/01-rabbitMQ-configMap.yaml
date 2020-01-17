@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-cfg
+  namespace: rabbit
+data:
+  RABBITMQ_VM_MEMORY_HIGH_WATERMARK: "0.6"
+  #HOSTNAME - we take this from the metadata, it will simply be rabbitmq-0...n
+  #NAMESPACE - we also take this from the metadata, we will need it further down for creating the node name
+  #RABBITMQ_USE_LONGNAME #use fully qualified names to identify rmq nodes
+  #RABBITMQ_BASIC_AUTH - the basic auth string used for the livenessProbe
+  #RABBITMQ_NODENAME - this is the node name of the pod based on the peer-discovery config - e.g. rabbit@rabbitmq-0.rabbitmq-internal.example.svc.cluster.local
+  #K8S_SERVICE_NAME - the k8s service name
+  #RABBITMQ_DEFAULT_USER - login user
+  #RABBITMQ_DEFAULT_PASS - login pw
+  #RABBITMQ_ERLANG_COOKIE - the erlang cookie
+  #NODE_NAME - the short node name, also generated from the metadata, same as the hostname
