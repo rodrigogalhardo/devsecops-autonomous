@@ -1,0 +1,62 @@
+version: '3.7'
+
+networks:
+    R2-D2:
+      name: R2-D2
+      driver: bridge
+      ipam:
+        config:
+          - subnet: 10.63.0.0/16
+
+services:
+
+  consul-agent-1: &consul-agent-1
+    image: docker-nexus.udstecnologia.com.br/consul:1.5
+    container_name: "consul-1.uds"
+    hostname: "consul-1.uds"
+    restart: always
+    ports:
+        - "80:8500"
+    volumes:
+        - ./consul/config:/consul/config
+        - ./consul/data:/consul/data
+        - /etc/timezone:/etc/timezone:ro
+        - /etc/localtime:/etc/localtime:ro
+    networks:
+      R2-D2:
+        ipv4_address: 10.63.0.200
+    command: "agent -server -bootstrap-expect=1 -client=0.0.0.0 -ui"
+
+  consul-agent-2: &consul-agent-2
+    image: docker-nexus.udstecnologia.com.br/consul:1.5
+    restart: always
+    container_name: "consul-2.uds"
+    hostname: "consul-2.uds"
+    depends_on:
+        - consul-agent-1
+    networks:
+      R2-D2:
+        ipv4_address: 10.63.0.201
+    ports:
+      - "8302:8301"
+      - "8401:8400"
+      - "8501:8500"
+      - "8601:53/udp"
+    command: "agent -server -bootstrap-expect=3 -advertise=10.63.0.201 -retry-join=10.63.0.200 -client=0.0.0.0 -ui"
+
+  consul-agent-3: &consul-agent-3
+    image: docker-nexus.udstecnologia.com.br/consul:1.5
+    container_name: "consul-3.uds"
+    restart: always
+    hostname: "consul-3.uds"
+    depends_on:
+      - consul-agent-2
+    networks:
+      R2-D2:
+        ipv4_address: 10.63.0.202
+    ports:
+      - "8303:8301"
+      - "8402:8400"
+      - "8502:8500"
+      - "8602:53/udp"
+    command: "agent -server -bootstrap-expect=3 -advertise=10.63.0.202 -retry-join=10.63.0.200 -client=0.0.0.0 -ui"
