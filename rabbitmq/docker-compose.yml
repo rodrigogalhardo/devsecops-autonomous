@@ -1,0 +1,19 @@
+rabbitmq:
+    image: "rabbitmq:3-management"
+    container_name: "rabbitmq-1.uds"
+    hostname: "rabbitmq-uds"
+    restart: always
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+      RABBITMQ_DEFAULT_USER: "uds-administrator"
+      RABBITMQ_DEFAULT_PASS: "sy$evc9P!Lj#7Df52&"
+      RABBITMQ_DEFAULT_VHOST: "/"
+    ports:
+      - "80:15672"
+      - "5672:5672"
+    labels:
+      NAME: "rabbitmq-uds"
+    volumes:
+      - "./data:/opt/rabbitmq/"
+      - "./definitions.json:/opt/rabbitmq/definitions.json:ro"
+      - "./rabbitmq.config:/opt/rabbitmq/rabbitmq.config:ro"
