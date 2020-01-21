@@ -11,7 +11,7 @@ prometheus:
           name: pvc
         spec:
           accessModes: ["ReadWriteOnce"]
-          storageClassName: eks-standard
+          storageClassName: gp2
           resources:
             requests:
               storage: 30Gi
@@ -31,12 +31,12 @@ grafana:
     - grafana.cardpay.udstecnologia.com.br
     tls:
     - hosts:
-      - grafana.carpay.restoque.com.br
+      - grafana.cardpay.udstecnologia.com.br
       secretName: cert-grafana-prd
   adminPassword: MGJyFLhuoOL2hl8b1xKSypA1aADcJpsDvrUrSs6b
   persistence:
     enabled: true
-    storageClassName: slow
+    storageClassName: gp2
     accessModes: ["ReadWriteOnce"]
     size: 30Gi
   plugins:
@@ -51,7 +51,7 @@ alertmanager:
           name: pvc
         spec:
           accessModes: ["ReadWriteOnce"]
-          storageClassName: slow
+          storageClassName: gp2
           resources:
             requests:
               storage: 30Gi

@@ -10,10 +10,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - grafana.cardpay.udstecnologia.com.br
+    - graffana.cardpay.udstecnologia.com.br
     secretName: cert-grafana-prd
   rules:
-    - host: grafana.cardpay.udstecnologia.com.br
+    - host: graffana.cardpay.udstecnologia.com.br
       http:
         paths:
         - backend:
